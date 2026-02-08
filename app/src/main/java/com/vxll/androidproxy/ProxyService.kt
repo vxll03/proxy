@@ -30,12 +30,10 @@ class ProxyService : Service() {
     }
 
     private fun createNotification(): Notification {
-        // Канал уведомлений
         val channel =
             NotificationChannel(CHANNEL_ID, "Proxy Service", NotificationManager.IMPORTANCE_DEFAULT)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
 
-        // Интент для кнопки "Остановить"
         val stopIntent = Intent(this, ProxyService::class.java).apply {
             action = ACTION_STOP
         }
@@ -58,54 +56,21 @@ class ProxyService : Service() {
             .build()
     }
 
-    private fun logLibContents() {
-        val libDir = applicationInfo.nativeLibraryDir
-        println("--- START LIB INSPECTION ---")
-        println("Native Library Dir: $libDir")
-
-        val root = File(libDir)
-        if (root.exists() && root.isDirectory) {
-            walkAndLog(root, 0)
-        } else {
-            println("Directory does not exist or is not a directory")
-        }
-        println("--- END LIB INSPECTION ---")
-    }
-
-    private fun walkAndLog(file: File, depth: Int) {
-        val indent = "  ".repeat(depth)
-        if (file.isDirectory) {
-            println("$indent[D] ${file.name}")
-            file.listFiles()?.forEach { child ->
-                walkAndLog(child, depth + 1)
-            }
-        } else {
-            val executable = if (file.canExecute()) "[X]" else "[ ]"
-            println("$indent[F] $executable ${file.name} (${file.length()} bytes)")
-        }
-    }
-
     private fun startBinary() {
         if (proxyProcess != null) return
 
-        // Получаем путь к папке, куда Android распаковал наши .so файлы
-        logLibContents()
         val libraryDir = applicationInfo.nativeLibraryDir
         val binary = File(libraryDir, "libopera-proxy.so")
 
-        println("DEBUG: Looking for binary at: ${binary.absolutePath}")
-        println("DEBUG: File exists: ${binary.exists()}")
-
         if (!binary.exists()) {
-            println("БИНАРНИК НЕ НАЙДЕН ПО ПУТИ: ${binary.absolutePath}")
+            println("BINARY FILE NOT FOUND IN: ${binary.absolutePath}")
             return
         }
 
         Thread {
             try {
-                // Теперь запускаем напрямую, права уже должны быть выданы системой
                 proxyProcess = ProcessBuilder(binary.absolutePath)
-                    .directory(filesDir) // Рабочая директория может остаться прежней
+                    .directory(filesDir)
                     .redirectErrorStream(true)
                     .start()
 
@@ -115,20 +80,19 @@ class ProxyService : Service() {
             }
             catch (e: java.io.IOException) {
                 if (proxyProcess != null) {
-                    println("PROXY: Процесс завершен пользователем")
+                    println("PROXY: Process finished by user")
                 } else {
                     e.printStackTrace()
                 }
             }
             catch (e: Exception) {
-                println("ОШИБКА ЗАПУСКА: ${e.message}")
+                println("ERROR: ${e.message}")
                 e.printStackTrace()
             }
         }.start()
     }
 
     override fun onDestroy() {
-        // Корректное завершение процесса
         proxyProcess?.destroy()
         proxyProcess = null
         super.onDestroy()

@@ -63,7 +63,6 @@ fun MainScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Теперь кнопка просто управляет сервисом
         ToggleButton()
     }
 }
@@ -75,7 +74,6 @@ fun ToggleButton() {
     Button(onClick = {
         val intent = Intent(context, ProxyService::class.java)
 
-        // Запускаем Foreground Service
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)
         } else {
