@@ -14,6 +14,7 @@ class ProxyService : Service() {
     private var proxyProcess: Process? = null
 
     companion object {
+        var isRunning = false
         const val ACTION_STOP = "com.vxll.androidproxy.STOP_PROXY"
         const val CHANNEL_ID = "proxy_channel"
     }
@@ -25,6 +26,8 @@ class ProxyService : Service() {
         }
 
         startForeground(1, createNotification())
+
+        isRunning = true
         startBinary()
         return START_STICKY
     }
@@ -95,6 +98,7 @@ class ProxyService : Service() {
     override fun onDestroy() {
         proxyProcess?.destroy()
         proxyProcess = null
+        isRunning = false
         super.onDestroy()
     }
 
