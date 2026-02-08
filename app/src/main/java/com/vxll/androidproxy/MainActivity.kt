@@ -1,5 +1,7 @@
 package com.vxll.androidproxy
 
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,22 +16,27 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import com.vxll.androidproxy.ui.theme.AndroidProxyTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.net.URL
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                101
+            )
+        }
+
         enableEdgeToEdge()
         setContent {
             AndroidProxyTheme {
@@ -49,47 +56,32 @@ fun MainScreen(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Заголовок",
+            text = "Opera Proxy",
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Теперь кнопка просто управляет сервисом
         ToggleButton()
     }
 }
 
 @Composable
-fun ToggleButton(context: android.content.Context) {
-    val scope = rememberCoroutineScope()
+fun ToggleButton() {
+    val context = LocalContext.current
 
     Button(onClick = {
-        scope.launch {
-            downloadGitHubFile(context, "Snawoot", "opera-proxy")
+        val intent = Intent(context, ProxyService::class.java)
+
+        // Запускаем Foreground Service
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
         }
     }) {
-        Text(text = "Нажми меня")
-    }
-}
-
-suspend fun downloadGitHubFile(context: android.content.Context, owner: String, repo: String) {
-    withContext(Dispatchers.IO) {
-        try {
-            val url = "https://github.com/$owner/$repo/archive/refs/heads/main.zip"
-
-            val connection = URL(url).openConnection()
-            val inputStream = connection.getInputStream()
-
-            val file = File(context.filesDir, "latest_release.zip")
-
-            file.outputStream().use { output ->
-                inputStream.copyTo(output)
-            }
-
-            println("Файл успешно сохранен в: ${file.absolutePath}")
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        Text(text = "Запустить прокси")
     }
 }

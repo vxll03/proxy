@@ -1,39 +1,73 @@
 package com.vxll.androidproxy.http.client
 
-import okhttp3.Call
-import okhttp3.Callback
+import android.os.Build
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import java.io.IOException
+import java.io.File
+import java.io.FileOutputStream
+
+// TODO: SHA256 check
 
 class HttpClient(
     private val owner: String,
     private val repo: String,
-    private val client: OkHttpClient = OkHttpClient()
 ) {
-    fun getLatestReleaseAndDownload() {
+    private val client: OkHttpClient = OkHttpClient()
+    private val json: Json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
+
+    private fun getAssetName(): String {
+        val archSuffix = if (Build.SUPPORTED_ABIS.contains("arm64-v8a")) "64" else ""
+        return "opera-proxy.android-arm$archSuffix"
+    }
+
+    suspend fun getLatestReleaseUrl(): String? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url("https://api.github.com/repos/${owner}/${repo}/releases/latest")
+            .url("https://api.github.com/repos/$owner/$repo/releases/latest")
             .build()
 
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                e.printStackTrace()
-            }
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
 
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    if (!response.isSuccessful) throw IOException("Unexpected code $response")
+                val body = response.body?.string() ?: return@withContext null
+                val release = json.decodeFromString<GitHubRelease>(body)
+                val targetName = getAssetName()
 
-                    val body = response.body?.string()
-                    // Здесь нужно распарсить JSON (например, через Gson или Kotlin Serialization)
-                    // И найти нужный URL в массиве "assets"
-                    val downloadUrl = "https://example.com/file_from_github.zip"
-                    println("response ${response.code}")
-                    // downloadFile(downloadUrl, "my_file.zip")
-                }
+                return@withContext release.assets.find { it.name == targetName }?.downloadUrl
             }
-        })
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
+
+    suspend fun downloadFile(fileUrl: String, destinationFile: File): File? =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(fileUrl).build()
+
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@withContext null
+
+                    val body = response.body ?: return@withContext null
+
+                    body.byteStream().use { inputStream ->
+                        destinationFile.outputStream().use { outputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+
+                    destinationFile
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
 }
